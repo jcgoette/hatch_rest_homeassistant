@@ -1,6 +1,10 @@
+"""Hatch Rest config flow."""
+
 import dataclasses
 import logging
 from typing import Any
+
+import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.components.bluetooth import (
@@ -8,11 +12,10 @@ from homeassistant.components.bluetooth import (
     async_ble_device_from_address,
     async_discovered_service_info,
 )
+from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_ADDRESS, CONF_SENSOR_TYPE
-from homeassistant.data_entry_flow import FlowResult
-from pyhatchbabyrest import PyHatchBabyRestAsync
-import voluptuous as vol
 
+from .api import PyHatchBabyRestAsync
 from .const import DOMAIN, MANUFACTURER_ID
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,7 +23,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # Much of this is sourced from the Switchbot official component
 def format_unique_id(address: str) -> str:
-    """Format the unique ID for a Hatch Baby Rest."""
+    """Format the unique ID for a Hatch Rest."""
     return address.replace(":", "").lower()
 
 
@@ -32,22 +35,29 @@ def short_address(address: str) -> str:
 
 @dataclasses.dataclass
 class DiscoveredDevice:
+    """Discovered device information."""
+
     name: str
     discovery_info: BluetoothServiceInfoBleak
-    device: PyHatchBabyRestAsync
+    hatch_rest_device: PyHatchBabyRestAsync
 
 
 class HatchBabyRestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Hatch Rest config flow."""
+
     VERSION = 1
 
     def __init__(self) -> None:
+        """Initialize the config flow."""
         self._discovered_device: DiscoveredDevice | None = None
         self._discovered_devices: dict[str, DiscoveredDevice] = {}
+        self._device_name: str | None = None
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
-    ) -> FlowResult:
-        _LOGGER.debug("Discovered Hatch Baby Rest %s", discovery_info.as_dict())
+    ) -> ConfigFlowResult:
+        """Handle the Bluetooth discovery step."""
+        _LOGGER.debug("Discovered Hatch Rest %s", discovery_info.as_dict())
         await self.async_set_unique_id(format_unique_id(discovery_info.address))
         self._abort_if_unique_id_configured()
 
@@ -55,18 +65,23 @@ class HatchBabyRestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ble_device = async_ble_device_from_address(
                 self.hass, discovery_info.address, connectable=True
             )
-            device = PyHatchBabyRestAsync(ble_device, scan_now=False, refresh_now=False)
-            await device.refresh_data()
-        except Exception:
+            if not ble_device:
+                raise ValueError("BLEDevice does not exist")  # noqa: TRY301
+            hatch_rest_device = PyHatchBabyRestAsync(ble_device)
+            await hatch_rest_device.refresh_data()
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("Unexpected error during async_step_bluetooth: %r", e)
             return self.async_abort(reason="unknown")
 
-        self._device_name = device.name
+        self._device_name = hatch_rest_device.name
         self._discovered_device = DiscoveredDevice(
-            name=device.name, discovery_info=discovery_info, device=device
+            name=hatch_rest_device.name or "",
+            discovery_info=discovery_info,
+            hatch_rest_device=hatch_rest_device,
         )
 
         self.context["title_placeholders"] = {
-            "name": self._device_name,
+            "name": self._device_name or "",
             "address": short_address(discovery_info.address),
         }
 
@@ -74,7 +89,8 @@ class HatchBabyRestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_bluetooth_confirm(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
+        """Blueooth confirmation step."""
         if user_input is not None:
             return await self._async_create_entry_from_discovery(user_input)
 
@@ -88,7 +104,8 @@ class HatchBabyRestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
+        """User input step."""
         if user_input is not None:
             address = user_input[CONF_ADDRESS]
             await self.async_set_unique_id(
@@ -113,16 +130,19 @@ class HatchBabyRestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 continue
 
             try:
-                ble_device = async_ble_device_from_address(discovery_info.address)
-                device = PyHatchBabyRestAsync(
-                    ble_device, scan_now=False, refresh_now=False
+                ble_device = async_ble_device_from_address(
+                    self.hass, discovery_info.address
                 )
-                await device.refresh_data()
-            except Exception:
+                if not ble_device:
+                    raise ValueError("BLEDevice does not exist")  # noqa: TRY301
+                hatch_rest_device = PyHatchBabyRestAsync(ble_device)
+                await hatch_rest_device.refresh_data()
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.debug("Unexpected error during async_step_user: %r", e)
                 return self.async_abort(reason="unknown")
-            name = device.name
+            name = hatch_rest_device.name
             self._discovered_devices[address] = DiscoveredDevice(
-                name, discovery_info, device
+                name or "", discovery_info, hatch_rest_device
             )
 
         if not self._discovered_devices:
@@ -138,11 +158,11 @@ class HatchBabyRestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def _async_create_entry_from_discovery(
         self, user_input: dict[str, Any]
-    ) -> FlowResult:
-        address = self._discovered_device.discovery_info.address
-        name = self._device_name
+    ) -> ConfigFlowResult:
+        if self._discovered_device:
+            address = self._discovered_device.discovery_info.address
         return self.async_create_entry(
-            title=name,
+            title=self._device_name or "",
             data={
                 **user_input,
                 CONF_ADDRESS: address,

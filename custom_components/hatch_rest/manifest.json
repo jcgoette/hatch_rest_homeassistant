@@ -1,0 +1,13 @@
+{
+  "domain": "hatch_rest",
+  "name": "Hatch Rest",
+  "bluetooth": [{ "manufacturer_id": 1076, "connectable": true }],
+  "codeowners": ["@jcgoette"],
+  "config_flow": true,
+  "dependencies": ["bluetooth_adapters"],
+  "documentation": "https://github.com/jcgoette/hatch_rest_homeassistant/",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "requirements": [],
+  "version": "1.0.0"
+}
