@@ -53,11 +53,14 @@ class HatchBabyRestMediaPlayer(HatchBabyRestEntity, MediaPlayerEntity):  # pyrig
     @property
     def source(self) -> str | None:  # pyright: ignore[reportIncompatibleVariableOverride]
         """Return the current source of the media player."""
-        _LOGGER.debug(
-            "media_player source = %d (%s)",
-            self.coordinator.data.get("sound"),
-            PyHatchBabyRestSound(self.coordinator.data.get("sound")).name,
-        )
+        if self.coordinator.data.get("sound"):
+            _LOGGER.debug(
+                "media_player source = %d (%s)",
+                self.coordinator.data.get("sound"),
+                PyHatchBabyRestSound(self.coordinator.data.get("sound")).name,
+            )
+        else:
+            _LOGGER.debug("media_player source = None")
         sound = self.coordinator.data.get("sound")
         if sound:
             return sound.name.capitalize()
