@@ -1,0 +1,35 @@
+name: pytest
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          cache: pip
+
+      - name: Install requirements
+        run: python3 -m pip install -r requirements-test.txt
+
+      - name: Run tests with coverage
+        run: |
+          pytest \
+            --cov=custom_components.hatch_rest \
+            --cov-report=term-missing

@@ -1,0 +1,15 @@
+# Test dependencies for Hatch Rest integration
+pytest
+pytest-asyncio
+pytest-cov
+pytest-homeassistant-custom-component
+
+# Home Assistant test utilities
+homeassistant
+
+# BLE dependencies (for type hints and mocking)
+bleak
+
+# Other?
+aiousbwatcher
+pyserial

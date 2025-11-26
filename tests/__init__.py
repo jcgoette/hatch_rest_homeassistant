@@ -1,0 +1,1 @@
+"""Hatch Rest integration tests."""
