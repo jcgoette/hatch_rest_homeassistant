@@ -13,7 +13,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .coordinator import HatchBabyRestEntity
+from .coordinator import HatchBabyRestEntity, HatchBabyRestUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +31,13 @@ async def async_setup_entry(
 
 class HatchBabyRestLight(HatchBabyRestEntity, LightEntity):  # pyright: ignore[reportIncompatibleVariableOverride]
     """Hatch Rest light entity."""
+
+    def __init__(self, coordinator: HatchBabyRestUpdateCoordinator) -> None:
+        """Initialize the light entity."""
+        super().__init__(coordinator)
+        # Remembered brightness so a bare toggle-off/on restores the prior level.
+        # The device has no separate lamp power, so "off" is brightness 0.
+        self._last_brightness: int = 255
 
     @property
     def brightness(self) -> int | None:  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -83,7 +90,15 @@ class HatchBabyRestLight(HatchBabyRestEntity, LightEntity):  # pyright: ignore[r
             _LOGGER.debug("light _hatch_rest_device power not on -- turning on")
             await self._hatch_rest_device.turn_power_on()
 
+        # A bare toggle-on (no brightness or color) would otherwise leave
+        # brightness at 0 -- which reads as "off" -- so the light could never be
+        # switched back on from the UI. Restore the last-known brightness stored
+        # by async_turn_off (falling back to full brightness).
+        if brightness is None and not (self.coordinator.data.get("brightness") or 0):
+            brightness = self._last_brightness or 255
+
         if brightness:
+            self._last_brightness = brightness
             _LOGGER.debug("light setting brightness = %s", brightness)
             await self._hatch_rest_device.set_brightness(brightness)
         if rgb:
@@ -97,6 +112,10 @@ class HatchBabyRestLight(HatchBabyRestEntity, LightEntity):  # pyright: ignore[r
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Set the light off."""
+        # Stash the current brightness before zeroing so async_turn_on can
+        # restore it (the device has no separate lamp power; off == brightness 0).
+        if current := (self.coordinator.data.get("brightness") or 0):
+            self._last_brightness = current
         await self._hatch_rest_device.set_brightness(0)
 
         # https://developers.home-assistant.io/docs/integration_fetching_data/

@@ -154,3 +154,75 @@ class TestHatchBabyRestLight:
         light_entity.coordinator.async_set_updated_data.assert_called_once_with(
             {"brightness": 0}
         )
+
+    @pytest.mark.asyncio
+    async def test_async_turn_off_remembers_brightness(
+        self, light_entity: HatchBabyRestLight
+    ):
+        """Turning off stashes the current brightness for later restore."""
+        light_entity._hatch_rest_device.set_brightness = AsyncMock()
+        light_entity.coordinator.data["brightness"] = 200
+
+        await light_entity.async_turn_off()
+
+        assert light_entity._last_brightness == 200
+        light_entity._hatch_rest_device.set_brightness.assert_called_once_with(0)
+
+    @pytest.mark.asyncio
+    async def test_async_turn_on_restores_last_brightness(
+        self, light_entity: HatchBabyRestLight
+    ):
+        """A bare turn_on while dark restores the remembered brightness."""
+        light_entity._hatch_rest_device.power = True
+        light_entity._hatch_rest_device.set_brightness = AsyncMock()
+        light_entity._last_brightness = 180
+        light_entity.coordinator.data["brightness"] = 0
+
+        await light_entity.async_turn_on()
+
+        light_entity._hatch_rest_device.set_brightness.assert_called_once_with(180)
+
+    @pytest.mark.asyncio
+    async def test_async_turn_on_defaults_full_when_unknown(
+        self, light_entity: HatchBabyRestLight
+    ):
+        """A bare turn_on while dark with no memory falls back to full brightness."""
+        light_entity._hatch_rest_device.power = True
+        light_entity._hatch_rest_device.set_brightness = AsyncMock()
+        # _last_brightness is at its 255 default
+        light_entity.coordinator.data["brightness"] = 0
+
+        await light_entity.async_turn_on()
+
+        light_entity._hatch_rest_device.set_brightness.assert_called_once_with(255)
+
+    @pytest.mark.asyncio
+    async def test_async_turn_on_no_restore_when_already_lit(
+        self, light_entity: HatchBabyRestLight
+    ):
+        """A bare turn_on while already lit must not clobber current brightness."""
+        light_entity._hatch_rest_device.power = True
+        light_entity._hatch_rest_device.set_brightness = AsyncMock()
+        light_entity.coordinator.data["brightness"] = 128
+
+        await light_entity.async_turn_on()
+
+        light_entity._hatch_rest_device.set_brightness.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_turn_off_then_on_round_trips_brightness(
+        self, light_entity: HatchBabyRestLight
+    ):
+        """Off then a bare on returns the light to its prior brightness."""
+        light_entity._hatch_rest_device.power = True
+        set_brightness = AsyncMock()
+        light_entity._hatch_rest_device.set_brightness = set_brightness
+
+        light_entity.coordinator.data["brightness"] = 90
+        await light_entity.async_turn_off()
+        set_brightness.assert_called_once_with(0)
+
+        set_brightness.reset_mock()
+        light_entity.coordinator.data["brightness"] = 0
+        await light_entity.async_turn_on()
+        set_brightness.assert_called_once_with(90)
