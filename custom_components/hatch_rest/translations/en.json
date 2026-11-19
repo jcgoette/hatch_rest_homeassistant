@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Select Hatch Rest",
+        "description": "Choose a discovered 1st-generation Hatch Rest device to set up.",
+        "data": {
+          "address": "Bluetooth Device"
+        }
+      },
+      "bluetooth_confirm": {
+        "title": "Confirm Hatch Rest",
+        "description": "Do you want to set up {name} ({address})?"
+      }
+    },
+    "error": {
+      "unknown": "An unexpected error occurred while connecting to the Hatch Rest. Check the Home Assistant logs for details."
+    },
+    "abort": {
+      "no_devices_found": "No 1st-generation Hatch Rest devices were found in Home Assistant's Bluetooth cache. Make sure your unit is a 1st-gen Bluetooth model (not Rest+ or 2nd Gen), force-close the Hatch Sleep app on any phones so it isn't holding an active Bluetooth connection, and ensure the device is within range of your Home Assistant host or an ESPHome Bluetooth Proxy.",
+      "already_configured": "This Hatch Rest device is already configured in Home Assistant."
+    }
+  }
+}
